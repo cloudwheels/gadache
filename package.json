@@ -1,0 +1,20 @@
+{
+  "name": "platform-node",
+  "version": "0.1.0",
+  "description": "install a single dash platform node locally using npm ",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "cloudwheels",
+  "license": "MIT",
+  "dependencies": {
+    "debug": "^4.1.1",
+    "decompress": "^4.2.0",
+    "decompress-targz": "^4.1.1",
+    "dotenv": "^8.2.0",
+    "node-wget": "^0.4.3",
+    "shelljs": "^0.8.3",
+    "username": "^5.1.0"
+  }
+}
