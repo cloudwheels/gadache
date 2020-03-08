@@ -4,6 +4,7 @@ const dbg = require('debug')('index:dbg');
 const os = require('os');
 const getUsr = require('username'); //use os.userInfo().username instead?
 const wget = require('node-wget'); //? use http request?
+const fetch = require('node-fetch');
 const path = require('path');
 const decompress = require('decompress');
 const decompressTargz = require('decompress-targz');
@@ -11,8 +12,9 @@ const util = require('util');
 const fs = require('fs');
 const writeFile = util.promisify(fs.writeFile);
 const readFile = util.promisify(fs.readFile);
-
-//const dashCoreConfInit = require("./conf-dashcore");
+const stream = require('stream');
+const streamPipeline = util.promisify(stream.pipeline);
+const axios = require('axios');
 
 
 
@@ -73,7 +75,7 @@ const installDir = path.join(usrHome,".gadache");
 dbg("Install Directory: " + installDir);
 
 //TODO - check for exisiting dashcore
-const dashcoreDir = path.join(usrHome,'.dashcore')
+const dashcoreDir = path.join(installDir, '.dashcore')
 dbg("dashcoreDir: " + dashcoreDir);
 
 const dashcoreConfFile = path.join(dashcoreDir, process.env.DASHCORE_CONF_FILENAME);
@@ -93,9 +95,15 @@ dbg("Dashcore Noge Config File: " + dashcoreNodeConfFile);
 //TODO fix / in file / directory name (?path.join);
 //correct file endings,
 //process error/success
+
+
+dbg("Creating main install directory...");
+shell.mkdir(installDir);
+
 /*
+const w = util.promisify(wget);
 await(
-  wget({url: dashcoreDownloadURL, dest: path.join(tmp,'core.tar.gz')},
+  w({url: dashcoreDownloadURL, dest: path.join(tmp,'core.tar.gz')},
     function (error, response, body) {
         if (error) {
             console.log('--- error:');
@@ -109,28 +117,41 @@ await(
     }
 )
 );
+*/
+dbg("Downloading core...");
+
+/*
+const response = await fetch(dashcoreDownloadURL);
+if (!response.ok) throw new Error(`unexpected response ${response.statusText}`);
+await streamPipeline(response.body, fs.createWriteStream(path.join(tmp,'core.tar.gz')));
+*/
+await download(dashcoreDownloadURL,path.join(tmp,'core.tar.gz'));
 
 
-dbg("Core downloaded.")
+dbg("Core downloaded.");
 
 //TODO - verify installation
 
 
 
+dbg("Creating Dashcore Directory....");
+shell.mkdir('-p', dashcoreDir);
 
-//shell.mkdir('-p', dashcoreDir);
+//TODO change decompress depending on file extension (os/platform)
 
-await(
+
+dbg("Decompressing Files...");
+await
   decompress(path.join(tmp,'core.tar.gz'), dashcoreDir, {
     plugins: [
         decompressTargz()
     ]
-}).then(() => {
-    console.log('Files decompressed');
-})
-);
+})//.then(() => {
+  //  console.log('Files decompressed');
+//})
+;
 
-
+dbg("Files decompressed...");
 
 //**** TODO: RENAME OR SET VAR FOR EXTRACTED DIRETORY USING VERSION ****
 
@@ -150,6 +171,9 @@ dbg("Writing dashcore config file");
 await (
   writeFile(dashcoreConfFile,
   "# general" + "\n" +
+  "port=" + process.env.DASHCORE_P2P_PORT + "\n" +
+  "devnet="  + process.env.DEVNET + "\n" +
+  "allowprivatenet=1" + "\n" +
   "daemon=1" + "\n" +
   "logtimestamps=1" + "\n" +
   "maxconnections=256" + "\n" +
@@ -161,23 +185,23 @@ await (
   "timestampindex=1" + "\n" +
   "spentindex=1" + "\n" +
   "# ZeroMQ notifications (required for Insight)" + "\n" +
-  "zmqpubrawtx=tcp://0.0.0.0:" + process.env.DASHCORE_CONF_ZEROMQ_PORT + "\n" +
-  "zmqpubrawtxlock=tcp://0.0.0.0:" + process.env.DASHCORE_CONF_ZEROMQ_PORT + "\n" +
-  "zmqpubhashblock=tcp://0.0.0.0:" + process.env.DASHCORE_CONF_ZEROMQ_PORT + "\n" +
-  "#zmqpubhashtx=tcp://0.0.0.0:" + process.env.DASHCORE_CONF_ZEROMQ_PORT + "\n" +
-  "#zmqpubhashtxlock=tcp://0.0.0.0:" + process.env.DASHCORE_CONF_ZEROMQ_PORT + "\n" +
-  "#zmqpubrawblock=tcp://0.0.0.0:" + process.env.DASHCORE_CONF_ZEROMQ_PORT + "\n" +
+  "zmqpubrawtx=tcp://0.0.0.0:" + process.env.DASHCORE_ZEROMQ_PORT + "\n" +
+  "zmqpubrawtxlock=tcp://0.0.0.0:" + process.env.DASHCORE_ZEROMQ_PORT + "\n" +
+  "zmqpubhashblock=tcp://0.0.0.0:" + process.env.DASHCORE_ZEROMQ_PORT + "\n" +
+  "#zmqpubhashtx=tcp://0.0.0.0:" + process.env.DASHCORE_ZEROMQ_PORT + "\n" +
+  "#zmqpubhashtxlock=tcp://0.0.0.0:" + process.env.DASHCORE_ZEROMQ_PORT + "\n" +
+  "#zmqpubrawblock=tcp://0.0.0.0:" + process.env.DASHCORE_ZEROMQ_PORT + "\n" +
   "# JSONRPC" + "\n" +
   "server=1" + "\n" +
-  "rpcuser=" + process.env.DASHCORE_CONF_RPC_USER + "\n" +
-  "rpcpassword=" + process.env.DASHCORE_CONF_RPC_PASSWORD + "\n" +
-  "rpcport=" + process.env.DASHCORE_CONF_RPC_PORT + "\n" +
+  "rpcuser=" + process.env.DASHCORE_RPC_USER + "\n" +
+  "rpcpassword=" + process.env.DASHCORE_RPC_PASSWORD + "\n" +
+  "rpcport=" + process.env.DASHCORE_RPC_PORT + "\n" +
   "rpcbind=0.0.0.0" + "\n" +
   "rpcallowip=0.0.0.0/0" + "\n" +
   "rpcworkqueue=64" + "\n" +
   "# external network" + "\n" +
   "listen=1" + "\n" +
-  "bind=0.0.0" + "\n"
+  "bind=0.0.0.0" + "\n"
   )
 );
 
@@ -236,10 +260,10 @@ dbg("Creating Insight Config JSON...");
 
 
 insightConfigJSON.port=process.env.INSIGHT_API_PORT;
-insightConfigJSON.servicesConfig.dashd.connect[0].rpcport=process.env.DASHCORE_CONF_RPC_PORT;
-insightConfigJSON.servicesConfig.dashd.connect[0].rpcuser=process.env.DASHCORE_CONF_RPC_USER;
-insightConfigJSON.servicesConfig.dashd.connect[0].rpcpassword=process.env.DASHCORE_CONF_RPC_PASSWORD;
-const ZMQSocket = "tcp://127.0.0.1:" + process.env.DASHCORE_CONF_ZEROMQ_PORT;
+insightConfigJSON.servicesConfig.dashd.connect[0].rpcport=process.env.DASHCORE_RPC_PORT;
+insightConfigJSON.servicesConfig.dashd.connect[0].rpcuser=process.env.DASHCORE_RPC_USER;
+insightConfigJSON.servicesConfig.dashd.connect[0].rpcpassword=process.env.DASHCORE_RPC_PASSWORD;
+const ZMQSocket = "tcp://127.0.0.1:" + process.env.DASHCORE_ZEROMQ_PORT;
 insightConfigJSON.servicesConfig.dashd.connect[0].zmqpubrawtx=ZMQSocket;
 insightConfigJSON.servicesConfig.dashd.connect[0].zmqpubhashblock=ZMQSocket;
 
@@ -256,11 +280,11 @@ await (
   
 dbg('Wrote config file:\n' + await (readFile(dashcoreNodeConfFile)));
 
-*/
+
 
 dbg("Installing Insight-API service...");
 
-shell.cd(dashcoreNodeDir); // remove - should be there
+//shell.cd(dashcoreNodeDir); // remove - should be there
 
 shell.exec("./bin/dashcore-node install https://github.com/dashevo/insight-api/");
 
@@ -270,5 +294,25 @@ shell.exec("./bin/dashcore-node start");
   
   
 })(); //end main function
+
+
+
+async function download (url, filepath) {
+
+  const writer = fs.createWriteStream(filepath)
+
+  const response = await axios({
+    url,
+    method: 'GET',
+    responseType: 'stream'
+  })
+
+  response.data.pipe(writer)
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve)
+    writer.on('error', reject)
+  })
+}
   
 
